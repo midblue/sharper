@@ -4,5 +4,4 @@ sharper({
   source: './',
   outputFolder: 'resized',
   height: 300.5,
-  watch: true,
 })

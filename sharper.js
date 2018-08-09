@@ -35,39 +35,16 @@ if (calledFromCommandLine) {
 }
 
 function runPrompt () {
-  prompt.get(promptSettings, async (err, result) => {
+  prompt.get(promptSettings, async (err, enteredOptions) => {
     if (err) return console.log(err)
-    await resizeProgrammatically(result)
+    await resizeProgrammatically(enteredOptions)
     runPrompt()
   })
 }
 
-function checkOptions (options) {
-  options.width = parseInt(options.width)
-  options.height = parseInt(options.height)
-  if (isNaN(options.width)) delete options.width
-  if (isNaN(options.height)) delete options.height
-
-  options.source = options.source.replace(/\s+$/g, '')
-  options.outputFolder = options.outputFolder.replace(/^\//g, '')
-
-  if (!options.width && !options.height)
-    return { err: 'Must specify at least one valid dimension' }
-  if (options.width <=0 || options.height <= 0)
-    return { err: 'Invalid width or height value.' }
-  if (options.source.length === 0)
-    options.source = './'
-  
-  return options
-}
-
 function initializeResize (options) {
   const results = resizeProgrammatically(options)
-  if (!results.err && options.watch === true) {
-    setInterval(() => {
-      resizeProgrammatically(options)
-    }, 2000)
-  }
+  // could add watching here later, etc
 }
 
 function resizeProgrammatically (options) {
@@ -133,6 +110,25 @@ function resizeProgrammatically (options) {
     resolve({ source, resized })
 
   })
+}
+
+function checkOptions(options) {
+  options.width = parseInt(options.width)
+  options.height = parseInt(options.height)
+  if (isNaN(options.width)) delete options.width
+  if (isNaN(options.height)) delete options.height
+
+  options.source = options.source.replace(/\s+$/g, '')
+  options.outputFolder = options.outputFolder.replace(/^\//g, '')
+
+  if (!options.width && !options.height)
+    return { err: 'Must specify at least one valid dimension' }
+  if (options.width <= 0 || options.height <= 0)
+    return { err: 'Invalid width or height value.' }
+  if (options.source.length === 0)
+    options.source = './'
+
+  return options
 }
 
 function resizeArrayOfImages(fileInfo, options) {
