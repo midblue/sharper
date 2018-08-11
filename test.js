@@ -1,13 +1,13 @@
-const sharper = require('./sharper.js')
+const sharper = require('./dist/sharper.js')
 
 async function test() {
 
   const res = await sharper({
-    source: './',
-    outputFolder: 'resized',
+    // source: './',
+    // outputFolder: 'resized',
     height: 500,
-    width: 800,
-    overwrite: false,
+    // width: 800,
+    // overwrite: false,
   })
 
   console.log('result:', res)

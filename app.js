@@ -8,15 +8,18 @@ const log = require('./scripts/log')
 const status = log('success')
 const err = log('sharper error', 'red')
 
+const DEFAULT_SOURCE = './'
+const DEFAULT_OUTPUT_FOLDER = 'resized'
+
 const promptSettings = {
   properties: {
     source: {
       required: true,
-      default: './'
+      default: DEFAULT_SOURCE
     },
     outputFolder: {
       required: false,
-      default: 'resized'
+      default: DEFAULT_OUTPUT_FOLDER
     },
     width: {
       pattern: /^\d*$/,
@@ -70,29 +73,31 @@ function resizeProgrammatically (options) {
 
     if (isImage(options.source) || isFolder(options.source)) {
 
-      const detailsOfImagesToResize = []
+      let detailsOfImagesToResize = []
+      let detailsOfOutputFolderImages
 
       if (isImage(options.source)) {
         const parsedImagePath = /(.*\/)?([^/]+\.(?:jpe?g|png))$/gim.exec(options.source)
         detailsOfImagesToResize.push({
-          sourceImage: parsedImagePath[0],
-          sourceDir: parsedImagePath[1] || '.',
+          sourceImage: path.resolve(parsedImagePath[0]),
+          sourceDir: path.resolve(parsedImagePath[1] || '.'),
           fileName: parsedImagePath[2],
         })
+        if (!options.overwrite)
+          detailsOfOutputFolderImages = await getDataOfImageFilesInFolder(path.resolve(parsedImagePath[1] || '.', options.outputFolder))
       }
 
       else {
         const sourceDetails = await getDataOfImageFilesInFolder(options.source)
         // need to check for returned error here
+        detailsOfImagesToResize.push(...sourceDetails)
+        if (!options.overwrite)
+          detailsOfOutputFolderImages = await getDataOfImageFilesInFolder(path.resolve(options.source, options.outputFolder))
+      }
 
-        if (!options.overwrite) {
-          const outputDetails = await getDataOfImageFilesInFolder(path.resolve(options.source, options.outputFolder))
-          // need to check for returned error here
-          const newFileDetails = removeDuplicateFiles(sourceDetails, outputDetails)
-          detailsOfImagesToResize.push(...newFileDetails)
-        }
-        else
-          detailsOfImagesToResize.push(...sourceDetails)
+      if (!options.overwrite) {
+        // need to check for returned error here
+        detailsOfImagesToResize = removeDuplicateFiles(detailsOfImagesToResize, detailsOfOutputFolderImages)
       }
 
       const resizedImageDetails = await resizeArrayOfImages(detailsOfImagesToResize, { ...options })
@@ -139,8 +144,8 @@ function checkOptions(options) {
   if (options.overwrite !== true && options.overwrite !== false)
     options.overwrite = false
 
-  options.source = options.source.replace(/\s+$/g, '')
-  options.outputFolder = options.outputFolder.replace(/^\//g, '')
+  options.source = (options.source || DEFAULT_SOURCE).replace(/\s+$/g, '')
+  options.outputFolder = (options.outputFolder || DEFAULT_OUTPUT_FOLDER).replace(/^\//g, '')
 
   if (!options.width && !options.height)
     return { err: 'Must specify at least one valid dimension' }

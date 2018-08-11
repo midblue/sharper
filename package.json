@@ -4,12 +4,22 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "parcel app.js --target=node --out-file sharper.js watch"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
     "prompt": "^1.0.0",
     "sharp": "^0.20.5"
+  },
+  "devDependencies": {
+    "babel-plugin-transform-object-rest-spread": "^6.26.0",
+    "parcel-bundler": "^1.9.7"
+  },
+  "browserslist": [
+    "last 1 Chrome version"
+  ],
+  "browser": {
+    "fs": false
   }
 }
