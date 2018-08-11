@@ -3,6 +3,10 @@ const fs = require('fs')
 const path = require('path')
 const prompt = require('prompt')
 const calledFromCommandLine = require.main === module
+const log = require('./scripts/log')
+
+const status = log('success')
+const err = log('sharper error', 'red')
 
 const promptSettings = {
   properties: {
@@ -36,15 +40,18 @@ if (calledFromCommandLine) {
 
 function runPrompt () {
   prompt.get(promptSettings, async (err, enteredOptions) => {
-    if (err) return console.log(err)
+    if (err) return err(err)
     await resizeProgrammatically(enteredOptions)
     runPrompt()
   })
 }
 
 function initializeResize (options) {
-  const results = resizeProgrammatically(options)
-  // could add watching here later, etc
+  return new Promise (async resolve => {
+    const results = await resizeProgrammatically(options)
+    resolve(results)
+    // could add watching here later, etc
+  })
 }
 
 function resizeProgrammatically (options) {
@@ -52,13 +59,14 @@ function resizeProgrammatically (options) {
 
     options = checkOptions(options)
     if (options.err) {
-      console.log(options.err)
+      err(options.err)
       return resolve(options)
     }
 
     const messages = []
     const source = []
     const resized = []
+    let success, fail
 
     if (isImage(options.source) || isFolder(options.source)) {
 
@@ -74,12 +82,22 @@ function resizeProgrammatically (options) {
       }
 
       else {
-        const details = await getDataOfImageFilesInFolder(options.source)
+        const sourceDetails = await getDataOfImageFilesInFolder(options.source)
         // need to check for returned error here
-        detailsOfImagesToResize.push(...details)
+
+        if (!options.overwrite) {
+          const outputDetails = await getDataOfImageFilesInFolder(path.resolve(options.source, options.outputFolder))
+          // need to check for returned error here
+          const newFileDetails = removeDuplicateFiles(sourceDetails, outputDetails)
+          detailsOfImagesToResize.push(...newFileDetails)
+        }
+        else
+          detailsOfImagesToResize.push(...sourceDetails)
       }
 
       const resizedImageDetails = await resizeArrayOfImages(detailsOfImagesToResize, { ...options })
+      success = resizedImageDetails.length
+      fail = detailsOfImagesToResize.length - success
 
       messages.push('Resized images:')
       for (let details of resizedImageDetails) {
@@ -100,14 +118,14 @@ function resizeProgrammatically (options) {
       resolve ({ err: 'Invalid path or image type' })
     }
 
-    if (messages.length > 0) {
+    if (messages.length > 0 && calledFromCommandLine) {
       console.log('')
       for (let message of messages)
-        console.log(message)
+        status(message)
       console.log('')
     }
 
-    resolve({ source, resized })
+    resolve({ source, resized, success, fail })
 
   })
 }
@@ -117,6 +135,9 @@ function checkOptions(options) {
   options.height = parseInt(options.height)
   if (isNaN(options.width)) delete options.width
   if (isNaN(options.height)) delete options.height
+
+  if (options.overwrite !== true && options.overwrite !== false)
+    options.overwrite = false
 
   options.source = options.source.replace(/\s+$/g, '')
   options.outputFolder = options.outputFolder.replace(/^\//g, '')
@@ -158,12 +179,12 @@ async function resizeImage({ sourceImage, sourceDir, fileName, width, height, ou
     .toFile(outputImageFullPath)
     .then(() => {
       return {
-        source: sourceImage,
+        source: path.resolve(sourceImage),
         fileName,
         output: outputImageFullPath,
       }
     })
-    .catch(e => console.log(e))
+    .catch(e => err(e))
 }
 
 function createFolder (path) {
@@ -208,6 +229,16 @@ function getDataOfImageFilesInFolder (sourceDir) {
 
     resolve(files)
   })
+}
+
+function removeDuplicateFiles (toRemoveFrom, comparison) {
+  return toRemoveFrom
+    .map(fileData => 
+      comparison.find(comparisonData => 
+        fileData.fileName === comparisonData.fileName
+      ) ? null : fileData
+    )
+    .filter(anyData => anyData)
 }
 
 function isImage (path) {
