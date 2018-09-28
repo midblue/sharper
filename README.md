@@ -12,6 +12,12 @@ node sharper.js
 ```
 const sharper = require('./sharper.js')
 
+// minimal
+sharper({ height: 500 })
+// or
+sharper({ width: 500 })
+
+// with options
 sharper({
   source: './myimages/jpg/',
   outputFolder: '../resized',
@@ -19,6 +25,20 @@ sharper({
   height: 500,
   overwrite: true
 })
+
+// batch resizing
+sharper([
+  {
+    source: './myimages/jpg/',
+    outputFolder: '../resized',
+    width: 800,
+  },
+  {
+    source: './myimages/jpg/',
+    outputFolder: '../resized/300',
+    width: 300,
+  }
+])
 ```
 
 Property | Required | Type | Default | Values

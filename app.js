@@ -1,12 +1,12 @@
 const sharp = require('sharp')
 const fs = require('fs')
 const path = require('path')
-const prompt = require('prompt')
+let prompt
 const calledFromCommandLine = require.main === module
 const log = require('./scripts/log')
 
 const status = log('success')
-const err = log('sharper error', 'red')
+const err = log('error', 'red')
 
 const DEFAULT_SOURCE = './'
 const DEFAULT_OUTPUT_FOLDER = 'resized'
@@ -37,6 +37,7 @@ const promptSettings = {
 }
 
 if (calledFromCommandLine) {
+  prompt = require('prompt')
   prompt.start()
   runPrompt()
 }
@@ -51,7 +52,23 @@ function runPrompt () {
 
 function initializeResize (options) {
   return new Promise (async resolve => {
-    const results = await resizeProgrammatically(options)
+    let results
+    if (Array.isArray(options)) {
+      const promises = options.map(async o => await resizeProgrammatically(o))
+      results = await Promise.all(promises)
+      results.forEach((r, index) => {
+        if (index === 0) return
+        Object.keys(r).forEach(key => {
+          if (Array.isArray(r[key]))
+            results[0][key].push(...r[key])
+          else if (Number.isInteger(r[key]))
+            results[0][key] += r[key]
+        })
+      })
+      results = results[0]
+    }
+    else
+      results = await resizeProgrammatically(options)
     resolve(results)
     // could add watching here later, etc
   })
@@ -69,7 +86,7 @@ function resizeProgrammatically (options) {
     const messages = []
     const source = []
     const resized = []
-    let success, fail
+    let success, fail, skipped
 
     if (isImage(options.source) || isFolder(options.source)) {
 
@@ -95,6 +112,7 @@ function resizeProgrammatically (options) {
           detailsOfOutputFolderImages = await getDataOfImageFilesInFolder(path.resolve(options.source, options.outputFolder))
       }
 
+      skipped = detailsOfImagesToResize.length
       if (!options.overwrite) {
         // need to check for returned error here
         detailsOfImagesToResize = removeDuplicateFiles(detailsOfImagesToResize, detailsOfOutputFolderImages)
@@ -103,6 +121,7 @@ function resizeProgrammatically (options) {
       const resizedImageDetails = await resizeArrayOfImages(detailsOfImagesToResize, { ...options })
       success = resizedImageDetails.length
       fail = detailsOfImagesToResize.length - success
+      skipped = skipped - success - fail
 
       messages.push('Resized images:')
       for (let details of resizedImageDetails) {
@@ -130,7 +149,7 @@ function resizeProgrammatically (options) {
       console.log('')
     }
 
-    resolve({ source, resized, success, fail })
+    resolve({ source, resized, success, fail, skipped })
 
   })
 }
@@ -207,11 +226,25 @@ function createFolder (path) {
 
 function getFilesInFolder (path) {
   return new Promise(resolve => {
-    fs.readdir(path, (err, files) => {
-      if (err) resolve(err)
+    fs.readdir(path, (e, files) => {
+      if (e) {
+        try { fs.mkdirSync(path) }
+        catch (e) {}
+        resolve([])
+      }
       else resolve(files)
     })
   })
+}
+
+async function getFilesInFolderAndCreatePathIfNecessary (path) {
+  const parts = path.split('/').filter(p => p)
+  let currPath = '', files
+  for (let pathEl of parts) {
+    currPath += pathEl + '/'
+    files = await getFilesInFolder(currPath)
+  }
+  return files
 }
 
 function getDataOfImageFilesInFolder (sourceDir) {
@@ -219,9 +252,9 @@ function getDataOfImageFilesInFolder (sourceDir) {
     if (!/.*\/$/g.exec(sourceDir))
       sourceDir += '/'
 
-    let files = await getFilesInFolder(sourceDir)
-    if (!Array.isArray(files))
-      return resolve(files) //err
+    let files = await getFilesInFolderAndCreatePathIfNecessary(sourceDir)
+    if (!Array.isArray(files)) //err
+      return resolve(files)
 
     files = files
       .filter(path => isImage(path))
